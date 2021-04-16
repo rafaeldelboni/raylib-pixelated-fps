@@ -1,6 +1,6 @@
-# raylib-pixalated-fps
+# raylib-pixelated-fps
 
-Testing raylib with some pixalated shader.
+Testing raylib with some pixelated shader.
 
 ## Compiling / Building
 

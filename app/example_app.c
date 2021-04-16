@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include "raylib.h"
 
@@ -22,6 +23,19 @@ int main(void)
     Mesh mesh = GenMeshCubicmap(imMap, (Vector3) { 1.0f, 1.0f, 1.0f });
     Model model = LoadModelFromMesh(mesh);
 
+    Vector3 positionPlayer = { 0.0f, 0.0f, 0.0f };            // Set model position
+
+    Model modelPlayer = LoadModel("resources/sheriff.glb"); // Load the animated model mesh and basic data
+    Texture2D texturePlayer = LoadTexture("resources/PolygonWestern_Texture_01_A.png");    // Load model texture and set material
+    modelPlayer.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = texturePlayer;
+
+    int animsCount = 0;
+    ModelAnimation *anims = LoadModelAnimations("resources/sheriff.glb", &animsCount);
+    int animFrameCounter = 0;
+
+    printf("FRAMES -----------> %d", anims[0].frameCount);
+
+
     // NOTE: Defining 0 (NULL) for vertex shader forces usage of internal default vertex shader
     Shader shader = LoadShader(0, TextFormat("resources/shaders/glsl%i/pixelizer.fs", GLSL_VERSION));
 
@@ -45,6 +59,11 @@ int main(void)
     // Main game loop
     while (!WindowShouldClose())    // Detect window close button or ESC key
     {
+        // Model animations
+        animFrameCounter++;
+        UpdateModelAnimation(modelPlayer, anims[0], animFrameCounter);
+        if (animFrameCounter >= anims[0].frameCount) animFrameCounter = 0;
+
         Vector3 oldCamPos = camera.position;    // Store old camera position
 
         UpdateCamera(&camera);      // Update camera
@@ -84,6 +103,7 @@ int main(void)
                 ClearBackground(RAYWHITE);  // Clear texture background
                 BeginMode3D(camera);        // Begin 3d mode drawing
                     DrawModel(model, mapPosition, 1.0f, WHITE); // Draw maze map
+                    DrawModelEx(modelPlayer, positionPlayer, (Vector3){ 1.0f, 0.0f, 0.0f }, 90.0f, (Vector3){ 0.25f, 0.25f, 0.25f }, WHITE);
                 EndMode3D();                // End 3d mode drawing, returns to orthographic 2d mode
             EndTextureMode();               // End drawing to texture (now we have a texture available for next passes)
 
