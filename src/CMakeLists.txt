@@ -1,3 +1,13 @@
+add_library(
+  rlights STATIC
+  rlights.c
+)
+
+target_link_libraries(
+  rlights
+  raylib
+)
+
 ###################################################################
 
 # COVERAGE

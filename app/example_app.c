@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "raymath.h"
 #include "raylib.h"
 
 #if defined(PLATFORM_DESKTOP)
