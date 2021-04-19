@@ -98,12 +98,15 @@ int main(void)
 
     Model box = LoadModelFromMesh(GenMeshCube(1,1,1));
     Model ball = LoadModelFromMesh(GenMeshSphere(.5,32,32));
+    Model plane = LoadModel("resources/grass-plane.obj"); // Load the animated model mesh and basic data
 
     // texture the models
     Texture texture = LoadTexture("resources/test.png");
+    Texture2D texturePlane = LoadTexture("resources/grass-texture.png");
 
     box.materials[0].maps[MAP_DIFFUSE].texture = texture;
     ball.materials[0].maps[MAP_DIFFUSE].texture = texture;
+    plane.materials[0].maps[MAP_DIFFUSE].texture = texturePlane;
 
     Shader shader = LoadShader("resources/simpleLight.vs", "resources/simpleLight.fs");
     // load a shader and set up some uniforms
@@ -117,6 +120,7 @@ int main(void)
     // models share the same shader
     box.materials[0].shader = shader;
     ball.materials[0].shader = shader;
+    plane.materials[0].shader = shader;
 
     // using 4 point lights, white, red, green and blue
     Light lights[MAX_LIGHTS];
@@ -138,7 +142,19 @@ int main(void)
     space = dHashSpaceCreate(NULL);
     contactgroup = dJointGroupCreate(0);
     dWorldSetGravity(world, 0, -9.8, 0);    // gravity
-    dCreatePlane (space,0,1,0,0);
+
+    // create some decidedly sub optimal indices!
+    int nV = plane.meshes[0].vertexCount;
+    int *groundInd = RL_MALLOC(nV*sizeof(int));
+    for (int i = 0; i<nV; i++ ) {
+        groundInd[i] = i;
+    }
+    dTriMeshDataID triData = dGeomTriMeshDataCreate();
+    dGeomTriMeshDataBuildSingle(triData, plane.meshes[0].vertices,
+                            3 * sizeof(float), nV,
+                            groundInd, nV,
+                            3 * sizeof(int));
+    dCreateTriMesh(space, triData, NULL, NULL, NULL);
 
     // create the physics bodies
     for (int i = 0; i < numObj; i++) {
@@ -222,7 +238,7 @@ int main(void)
                     float* pos = (float *) dBodyGetPosition(obj[i]);
                     float* rot = (float *) dBodyGetRotation(obj[i]);
 
-                    if(fabs(pos[0]) > 20 || fabs(pos[2]) > 20) {
+                    if(fabs(pos[0]) > 45 || fabs(pos[2]) > 45) {
                         // teleport back if too far away
                         dBodySetPosition(obj[i], dRandReal() * 10 - 5,
                                                 8, dRandReal() * 10 - 5);
@@ -243,7 +259,7 @@ int main(void)
                     }
                 }
 
-                DrawGrid(45, 1.0f);
+                DrawModel(plane, (Vector3){0,0,0}, 1.0f, WHITE);
 
             EndMode3D();
 
@@ -260,8 +276,11 @@ int main(void)
     //--------------------------------------------------------------------------------------
     UnloadModel(box);
     UnloadModel(ball);
+    UnloadModel(plane);
     UnloadTexture(texture);
+    UnloadTexture(texturePlane);
 
+    free(groundInd);
     dJointGroupEmpty(contactgroup);
     dJointGroupDestroy(contactgroup);
     dSpaceDestroy(space);
@@ -273,4 +292,3 @@ int main(void)
 
     return 0;
 }
-

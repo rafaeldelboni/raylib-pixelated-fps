@@ -34,9 +34,6 @@ int main(void)
     ModelAnimation *anims = LoadModelAnimations("resources/sheriff.glb", &animsCount);
     int animFrameCounter = 0;
 
-    printf("FRAMES -----------> %d", anims[0].frameCount);
-
-
     // NOTE: Defining 0 (NULL) for vertex shader forces usage of internal default vertex shader
     Shader shader = LoadShader(0, TextFormat("resources/shaders/glsl%i/pixelizer.fs", GLSL_VERSION));
 
