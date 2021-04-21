@@ -2,19 +2,15 @@
 build/debug/*
 build/release/*
 build/coverage/*
-!build/debug/.gitkeep
-!build/release/.gitkeep
-!build/coverage/.gitkeep
 build/compile_commands.json
-
 
 # Prerequisites
 *.d
 
 # Object files
 *.o
-*.ko
 *.obj
+*.ko
 *.elf
 
 # Linker output
@@ -65,4 +61,8 @@ dkms.conf
 .vscode
 .cache
 
-!resources/*.objs
+# Ignores
+!build/debug/.gitkeep
+!build/release/.gitkeep
+!build/coverage/.gitkeep
+!resources/*.obj
