@@ -62,7 +62,7 @@ dkms.conf
 .cache
 
 # Ignores
-!resources/*.objs
+!resources/*.obj
 !build/debug/.gitkeep
 !build/release/.gitkeep
 !build/coverage/.gitkeep
