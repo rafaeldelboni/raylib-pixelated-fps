@@ -2,7 +2,6 @@
 *   This example Copyright (c) 2018 Chris Camacho (codifies) http://bedroomcoders.co.uk/captcha/
 ********************************************************************************************/
 
-#include "ode/collision.h"
 #include "ode/mass.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -14,7 +13,7 @@
 dWorldID world;
 dJointGroupID contactgroup;
 
-#define numObj 1  // 100 boxes, 100 spheres, 100 cylinders
+#define numObj 300  // 100 boxes, 100 spheres, 100 cylinders
 
 // set a raylib model matrix from an ODE rotation matrix and position
 void setTransform(const float pos[3], const float R[12], Matrix* matrix)
@@ -35,6 +34,52 @@ void setTransform(const float pos[3], const float R[12], Matrix* matrix)
     matrix->m13 = pos[1];
     matrix->m14 = pos[2];
     matrix->m15 = 1;
+}
+
+void setTransformCylinder(const float pos[3], const float R[12], Matrix* matrix, float length)
+{
+    Matrix m;
+    m.m0 = R[0] ;
+    m.m1 = R[4];
+    m.m2 = R[8];
+    m.m3 = 0;
+    m.m4 = R[1];
+    m.m5 = R[5];
+    m.m6 = R[9];
+    m.m7 = 0;
+    m.m8 = R[2];
+    m.m9 = R[6];
+    m.m10 = R[10];
+    m.m11 = 0;
+    m.m12 = pos[0];
+    m.m13 = pos[1];
+    m.m14 = pos[2];
+    m.m15 = 1;
+
+    // rotate because the cylinder axis looks diferent
+    Matrix r = MatrixRotateX(DEG2RAD*90);
+    // move the origin of the model to the center
+    // -1.5 is because is half o 3 (the length of the cylinder)
+    Matrix t = MatrixTranslate(0,length/2*-1,0);
+    Matrix nMatrix =  MatrixMultiply(r,m);
+    nMatrix =  MatrixMultiply(t, nMatrix);
+
+    matrix->m0 = nMatrix.m0;
+    matrix->m1 = nMatrix.m1;
+    matrix->m2 = nMatrix.m2;
+    matrix->m3 = nMatrix.m3;
+    matrix->m4 = nMatrix.m4;
+    matrix->m5 = nMatrix.m5;
+    matrix->m6 = nMatrix.m6;
+    matrix->m7 = nMatrix.m7;
+    matrix->m8 = nMatrix.m8;
+    matrix->m9 = nMatrix.m9;
+    matrix->m10 =nMatrix.m10;
+    matrix->m11 =nMatrix.m11;
+    matrix->m12 =nMatrix.m12;
+    matrix->m13 =nMatrix.m13;
+    matrix->m14 =nMatrix.m14;
+    matrix->m15 =nMatrix.m15;
 }
 
 // when objects potentially collide this callback is called
@@ -161,16 +206,6 @@ int main(void)
                             3 * sizeof(int));
     dCreateTriMesh(space, triData, NULL, NULL, NULL);
 
-    int indexCount = cylinder.meshes[0].vertexCount;
-    int *objInd = RL_MALLOC(indexCount*sizeof(int));
-    for (int i = 0; i<indexCount; i++ ) {
-        objInd[i] = i;
-    }
-    dTriMeshDataID new_tmdata = dGeomTriMeshDataCreate();
-    dGeomTriMeshDataBuildSingle(new_tmdata, cylinder.meshes[0].vertices, 3 * sizeof(float), indexCount, 
-            objInd, indexCount, 3 * sizeof(dTriIndex));
-    dGeomTriMeshDataPreprocess2(new_tmdata, (1U << dTRIDATAPREPROCESS_BUILD_FACE_ANGLES), NULL);
-
     // create the physics bodies
     for (int i = 0; i < numObj; i++) {
         obj[i] = dBodyCreate(world);
@@ -188,15 +223,11 @@ int main(void)
             /*geom = dCreateCylinder(space, 0.5, 1.0);*/
             /*dMassSetCylinderTotal(&m, 1.0, 2, 0.5, 1.0);*/
         /*}*/
+        geom = dCreateCapsule(space, 0.5, 1.0);
+        dMassSetCylinderTotal(&m, 1.0, 3, 0.5, 1.0);
 
-        // testing only cylinders
-        /*geom = dCreateCylinder(space, 0.5, 1.0);*/
-        /*dMassSetCylinderTotal(&m, 1.0, 2, 0.5, 1.0);*/
-
-        geom = dCreateTriMesh(space, new_tmdata, 0, 0, 0);
-        dMassSetTrimesh( &m, 1.0, geom  );
-        dGeomSetPosition(geom , -m.c[0], -m.c[1], -m.c[2]);
-        dMassTranslate(&m, -m.c[0], -m.c[1], -m.c[2]);
+        dBodySetMass(obj[i], &m);
+        dGeomSetBody(geom, obj[i]);
 
         // give the body a random position and rotation
         dBodySetPosition(obj[i],
@@ -212,8 +243,6 @@ int main(void)
 
         dBodySetRotation(obj[i], R);
         // set the bodies mass and the newly created geometry
-        dBodySetMass(obj[i], &m);
-        dGeomSetBody(geom, obj[i]);
     }
 
     //--------------------------------------------------------------------------------------
@@ -285,10 +314,10 @@ int main(void)
                         /*setTransform(pos, rot, &ball.transform);*/
                         /*DrawModel(ball, (Vector3){0,0,0}, 1.0f, WHITE);*/
                     /*} else {*/
-                        /*setTransform(pos, rot, &cylinder.transform);*/
+                        /*setTransformCylinder(pos, rot, &cylinder.transform, 1);*/
                         /*DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);*/
                     /*}*/
-                    setTransform(pos, rot, &cylinder.transform);
+                    setTransformCylinder(pos, rot, &cylinder.transform, 1);
                     DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);
                 }
 
