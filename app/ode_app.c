@@ -14,7 +14,7 @@
 dWorldID world;
 dJointGroupID contactgroup;
 
-#define numObj 300  // 100 boxes, 100 spheres, 100 cylinders
+#define numObj 1  // 100 boxes, 100 spheres, 100 cylinders
 
 // set a raylib model matrix from an ODE rotation matrix and position
 void setTransform(const float pos[3], const float R[12], Matrix* matrix)
@@ -161,6 +161,16 @@ int main(void)
                             3 * sizeof(int));
     dCreateTriMesh(space, triData, NULL, NULL, NULL);
 
+    int indexCount = cylinder.meshes[0].vertexCount;
+    int *objInd = RL_MALLOC(indexCount*sizeof(int));
+    for (int i = 0; i<indexCount; i++ ) {
+        objInd[i] = i;
+    }
+    dTriMeshDataID new_tmdata = dGeomTriMeshDataCreate();
+    dGeomTriMeshDataBuildSingle(new_tmdata, cylinder.meshes[0].vertices, 3 * sizeof(float), indexCount, 
+            objInd, indexCount, 3 * sizeof(dTriIndex));
+    dGeomTriMeshDataPreprocess2(new_tmdata, (1U << dTRIDATAPREPROCESS_BUILD_FACE_ANGLES), NULL);
+
     // create the physics bodies
     for (int i = 0; i < numObj; i++) {
         obj[i] = dBodyCreate(world);
@@ -180,8 +190,13 @@ int main(void)
         /*}*/
 
         // testing only cylinders
-        geom = dCreateCylinder(space, 0.5, 1.0);
-        dMassSetCylinderTotal(&m, 1.0, 2, 0.5, 1.0);
+        /*geom = dCreateCylinder(space, 0.5, 1.0);*/
+        /*dMassSetCylinderTotal(&m, 1.0, 2, 0.5, 1.0);*/
+
+        geom = dCreateTriMesh(space, new_tmdata, 0, 0, 0);
+        dMassSetTrimesh( &m, 1.0, geom  );
+        dGeomSetPosition(geom , -m.c[0], -m.c[1], -m.c[2]);
+        dMassTranslate(&m, -m.c[0], -m.c[1], -m.c[2]);
 
         // give the body a random position and rotation
         dBodySetPosition(obj[i],
