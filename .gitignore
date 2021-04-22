@@ -2,11 +2,7 @@
 build/debug/*
 build/release/*
 build/coverage/*
-!build/debug/.gitkeep
-!build/release/.gitkeep
-!build/coverage/.gitkeep
 build/compile_commands.json
-
 
 # Prerequisites
 *.d
@@ -65,4 +61,8 @@ dkms.conf
 .vscode
 .cache
 
+# Ignores
 !resources/*.objs
+!build/debug/.gitkeep
+!build/release/.gitkeep
+!build/coverage/.gitkeep

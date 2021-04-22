@@ -2,6 +2,8 @@
 *   This example Copyright (c) 2018 Chris Camacho (codifies) http://bedroomcoders.co.uk/captcha/
 ********************************************************************************************/
 
+#include "ode/collision.h"
+#include "ode/mass.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlights.h"
@@ -12,7 +14,7 @@
 dWorldID world;
 dJointGroupID contactgroup;
 
-#define numObj 200  // 100 boxes, 100 spheres
+#define numObj 300  // 100 boxes, 100 spheres, 100 cylinders
 
 // set a raylib model matrix from an ODE rotation matrix and position
 void setTransform(const float pos[3], const float R[12], Matrix* matrix)
@@ -99,6 +101,7 @@ int main(void)
 
     Model box = LoadModelFromMesh(GenMeshCube(1,1,1));
     Model ball = LoadModelFromMesh(GenMeshSphere(.5,32,32));
+    Model cylinder = LoadModelFromMesh(GenMeshCylinder(.5,1,32));
     Model plane = LoadModel("resources/grass-plane.obj"); // Load the animated model mesh and basic data
 
     // texture the models
@@ -107,6 +110,7 @@ int main(void)
 
     box.materials[0].maps[MAP_DIFFUSE].texture = texture;
     ball.materials[0].maps[MAP_DIFFUSE].texture = texture;
+    cylinder.materials[0].maps[MAP_DIFFUSE].texture = texture;
     plane.materials[0].maps[MAP_DIFFUSE].texture = texturePlane;
 
     Shader shader = LoadShader("resources/simpleLight.vs", "resources/simpleLight.fs");
@@ -164,13 +168,21 @@ int main(void)
         dMatrix3 R;
         dMass m;
         // create either a box or sphere with the apropriate mass
-        if (i<numObj/2) {
-            geom = dCreateBox(space, 1,1,1);
-            dMassSetBoxTotal (&m, 1, 0.5, 0.5, 0.5);
-        } else {
-            geom = dCreateSphere(space,0.5);
-            dMassSetSphereTotal (&m, 1, 0.5);
-        }
+        /*if (i<100) {*/
+            /*geom = dCreateBox(space, 1,1,1);*/
+            /*dMassSetBoxTotal(&m, 1, 0.5, 0.5, 0.5);*/
+        /*} else if (i<200) {*/
+            /*geom = dCreateSphere(space,0.5);*/
+            /*dMassSetSphereTotal(&m, 1, 0.5);*/
+        /*} else {*/
+            /*geom = dCreateCylinder(space, 0.5, 1.0);*/
+            /*dMassSetCylinderTotal(&m, 1.0, 2, 0.5, 1.0);*/
+        /*}*/
+
+        // testing only cylinders
+        geom = dCreateCylinder(space, 0.5, 1.0);
+        dMassSetCylinderTotal(&m, 1.0, 2, 0.5, 1.0);
+
         // give the body a random position and rotation
         dBodySetPosition(obj[i],
                 dRandReal() * 10 - 5,
@@ -251,13 +263,18 @@ int main(void)
                     // set transform takes the bodies position and rotation
                     // matrix from ODE and inserts it into the models
                     // transform matrix
-                    if (i<numObj/2) {
-                        setTransform(pos, rot, &box.transform);
-                        DrawModel(box, (Vector3){0,0,0}, 1.0f, WHITE);
-                    } else {
-                        setTransform(pos, rot, &ball.transform);
-                        DrawModel(ball, (Vector3){0,0,0}, 1.0f, WHITE);
-                    }
+                    /*if (i<100) {*/
+                        /*setTransform(pos, rot, &box.transform);*/
+                        /*DrawModel(box, (Vector3){0,0,0}, 1.0f, WHITE);*/
+                    /*} else if (i<200) {*/
+                        /*setTransform(pos, rot, &ball.transform);*/
+                        /*DrawModel(ball, (Vector3){0,0,0}, 1.0f, WHITE);*/
+                    /*} else {*/
+                        /*setTransform(pos, rot, &cylinder.transform);*/
+                        /*DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);*/
+                    /*}*/
+                    setTransform(pos, rot, &cylinder.transform);
+                    DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);
                 }
 
                 DrawModel(plane, (Vector3){0,0,0}, 1.0f, WHITE);
