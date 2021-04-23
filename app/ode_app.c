@@ -2,7 +2,9 @@
 *   This example Copyright (c) 2018 Chris Camacho (codifies) http://bedroomcoders.co.uk/captcha/
 ********************************************************************************************/
 
+#include "ode/common.h"
 #include "ode/mass.h"
+#include "ode/objects.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlights.h"
@@ -13,7 +15,7 @@
 dWorldID world;
 dJointGroupID contactgroup;
 
-#define numObj 300  // 100 boxes, 100 spheres, 100 cylinders
+#define numObj 0  // 100 boxes, 100 spheres, 100 cylinders
 
 // set a raylib model matrix from an ODE rotation matrix and position
 void setTransform(const float pos[3], const float R[12], Matrix* matrix)
@@ -122,6 +124,36 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
 
 }
 
+dBodyID createPlayerBody(dSpaceID space, dWorldID world) {
+    dBodyID obj = dBodyCreate(world);
+    dGeomID geom = dCreateCapsule(space, 0.5, 1.0);
+    dMatrix3 R;
+    dMass m;
+
+    dMassSetCapsuleTotal(&m, 1.0, 3, 0.5, 1.0);
+
+    dBodySetMass(obj, &m);
+    dGeomSetBody(geom, obj);
+
+    // give the body a random position and rotation
+    dBodySetPosition(obj, 0, 5, 0);
+    dRFromAxisAndAngle(R, 1.0f, 0, 0, 90.0f*DEG2RAD);
+    dBodySetRotation(obj, R);
+
+    dBodySetMaxAngularSpeed(obj, 0);
+
+    return obj;
+}
+
+void drawCylinder(dBodyID body, Model cylinder) {
+    float length = 1.0f;
+    setTransformCylinder(
+            (float *) dBodyGetPosition(body),
+            (float *) dBodyGetRotation(body),
+            &cylinder.transform,
+            length);
+    DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);
+}
 
 int main(void)
 {
@@ -183,7 +215,7 @@ int main(void)
     lights[3] = CreateLight(LIGHT_POINT, (Vector3){ -25,25,25 }, Vector3Zero(),
                     BLUE, shader);
 
-    SetCameraMode(camera, CAMERA_ORBITAL);     // Set camera mode
+    SetCameraMode(camera, CAMERA_CUSTOM);     // Set camera mode
 
     SetTargetFPS(60);   // Set our game to run at 60 frames-per-second
 
@@ -213,21 +245,17 @@ int main(void)
         dMatrix3 R;
         dMass m;
         // create either a box or sphere with the apropriate mass
-        /*if (i<100) {*/
-            /*geom = dCreateBox(space, 1,1,1);*/
-            /*dMassSetBoxTotal(&m, 1, 0.5, 0.5, 0.5);*/
-        /*} else if (i<200) {*/
-            /*geom = dCreateSphere(space,0.5);*/
-            /*dMassSetSphereTotal(&m, 1, 0.5);*/
-        /*} else {*/
-            /*geom = dCreateCylinder(space, 0.5, 1.0);*/
-            /*dMassSetCylinderTotal(&m, 1.0, 2, 0.5, 1.0);*/
-        /*}*/
-        geom = dCreateCapsule(space, 0.5, 1.0);
-        dMassSetCylinderTotal(&m, 1.0, 3, 0.5, 1.0);
+        if (i<numObj/2) {
+            geom = dCreateBox(space, 1,1,1);
+            dMassSetBoxTotal(&m, 1, 0.5, 0.5, 0.5);
+        } else {
+            geom = dCreateSphere(space,0.5);
+            dMassSetSphereTotal(&m, 1, 0.5);
+        }
 
-        dBodySetMass(obj[i], &m);
+        // set the bodies mass and the newly created geometry
         dGeomSetBody(geom, obj[i]);
+        dBodySetMass(obj[i], &m);
 
         // give the body a random position and rotation
         dBodySetPosition(obj[i],
@@ -242,8 +270,15 @@ int main(void)
                 dRandReal() * 10.0 - 5.0);
 
         dBodySetRotation(obj[i], R);
-        // set the bodies mass and the newly created geometry
     }
+
+    dBodyID playerBody = createPlayerBody(space, world);
+
+    float CAMERA_MOUSE_MOVE_SENSITIVITY = 0.003f;
+    Vector2 mousePositionDelta = { 0.0f, 0.0f };
+    Vector2 previousMousePosition = { 0.0f, 0.0f };
+    float AngleX = 0.f;
+    float AngleY = 0.f;
 
     //--------------------------------------------------------------------------------------
     // Main game loop
@@ -267,6 +302,7 @@ int main(void)
         // step the world
         dWorldQuickStep(world, 1. / 60.0);
         dJointGroupEmpty(contactgroup);
+        DisableCursor();
 
         //----------------------------------------------------------------------------------
         // Draw
@@ -283,12 +319,19 @@ int main(void)
                 if (lights[3].enabled) { DrawCube(lights[3].position,.2,.2,.2,BLUE); }
 
                 int spaceDown = IsKeyDown(KEY_SPACE);
+                int upDown = IsKeyDown(KEY_W);
+                int leftDown = IsKeyDown(KEY_A);
+                int downDown = IsKeyDown(KEY_S);
+                int rightDown = IsKeyDown(KEY_D);
 
                 for (int i = 0; i < numObj; i++) {
                     // apply force if the space key is held
                     if (spaceDown) {
-                        dBodyAddForce(obj[i],
-                            dRandReal()*40-20, 20.0f, dRandReal()*40-20);
+                        dBodyAddForce(
+                                obj[i],
+                                dRandReal()*40-20,
+                                20.0f,
+                                dRandReal()*40-20);
                         dBodyEnable (obj[i]); // case its gone to sleep
                     }
 
@@ -307,19 +350,81 @@ int main(void)
                     // set transform takes the bodies position and rotation
                     // matrix from ODE and inserts it into the models
                     // transform matrix
-                    /*if (i<100) {*/
-                        /*setTransform(pos, rot, &box.transform);*/
-                        /*DrawModel(box, (Vector3){0,0,0}, 1.0f, WHITE);*/
-                    /*} else if (i<200) {*/
-                        /*setTransform(pos, rot, &ball.transform);*/
-                        /*DrawModel(ball, (Vector3){0,0,0}, 1.0f, WHITE);*/
-                    /*} else {*/
-                        /*setTransformCylinder(pos, rot, &cylinder.transform, 1);*/
-                        /*DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);*/
-                    /*}*/
-                    setTransformCylinder(pos, rot, &cylinder.transform, 1);
-                    DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);
+                    if (i<numObj/2) {
+                        setTransform(pos, rot, &box.transform);
+                        DrawModel(box, (Vector3){0,0,0}, 1.0f, WHITE);
+                    } else {
+                        setTransform(pos, rot, &ball.transform);
+                        DrawModel(ball, (Vector3){0,0,0}, 1.0f, WHITE);
+                    }
                 }
+
+                Vector2 mousePosition = GetMousePosition();
+
+                mousePositionDelta.x = mousePosition.x - previousMousePosition.x;
+                mousePositionDelta.y = mousePosition.y - previousMousePosition.y;
+                previousMousePosition = mousePosition;
+
+                AngleX += (mousePositionDelta.x*-CAMERA_MOUSE_MOVE_SENSITIVITY);
+                AngleY += (mousePositionDelta.y*-CAMERA_MOUSE_MOVE_SENSITIVITY);
+
+                float rotateVel = 0.0;
+                float accelVel = 0.0;
+
+                if (upDown) {
+                    accelVel = 15;
+                }
+
+                if (downDown) {
+                    accelVel = -15;
+                }
+
+                if (leftDown) {
+                    rotateVel = 0.1;
+                }
+
+                if (rightDown) {
+                    rotateVel = -0.1;
+                }
+
+                /*if (!upDown && !downDown && !leftDown && !rightDown) {*/
+                    /*dBodySetAngularVel(playerBody, 0,0,0);*/
+                    /*dBodySetLinearVel(playerBody, 0, dBodyGetLinearVel(playerBody)[1],0);*/
+                /*}*/
+
+                // Moving forward and backward
+                dBodyEnable (playerBody); // case its gone to sleep
+                float* qtpos = (float *) dBodyGetQuaternion(playerBody);
+                Quaternion q = {
+                    .w = qtpos[0],
+                    .x = qtpos[1],
+                    .y = qtpos[2],
+                    .z = qtpos[3],
+                };
+                Vector3 vel = Vector3RotateByQuaternion((Vector3){accelVel*cos(1), 0, accelVel*sin(1)}, q);
+                dBodySetAngularVel(playerBody, vel.x, vel.y, vel.z);
+
+                //Rotating left and right
+                dBodyEnable (playerBody); // case its gone to sleep
+                float* qt = (float *) dBodyGetQuaternion(playerBody);
+                Quaternion qt1 = {.w = qt[0], .x = qt[1], .y = qt[2], .z = qt[3]};
+                Quaternion qt2 = QuaternionFromAxisAngle((Vector3){0, 0, 1}, rotateVel);
+                Quaternion qt3 = QuaternionMultiply(qt1, qt2);
+
+                float qt4[4] = {qt3.w, qt3.x, qt3.y, qt3.z};
+                dBodySetQuaternion(playerBody, qt4);
+
+                /*float* pos = (float *) dBodyGetPosition(playerBody);*/
+                /*float* rot = (float *) dBodyGetQuaternion(playerBody);*/
+                /*camera.position = (Vector3){pos[0], pos[1], pos[2]};*/
+                /*Matrix translation = MatrixTranslate(0, 0, 1);*/
+                /*Matrix rotation = MatrixRotateXYZ((Vector3){ PI*2 - rot[2], PI*2 - rot[1], 0 });*/
+                /*Matrix transform = MatrixMultiply(translation, rotation);*/
+                /*camera.target.x = camera.position.x - transform.m12;*/
+                /*camera.target.y = camera.position.y - transform.m13;*/
+                /*camera.target.z = camera.position.z - transform.m14;*/
+
+                drawCylinder(playerBody, cylinder);
 
                 DrawModel(plane, (Vector3){0,0,0}, 1.0f, WHITE);
 
