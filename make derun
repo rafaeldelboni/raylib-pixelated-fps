@@ -4,10 +4,8 @@
 
 #include "ode/collision.h"
 #include "ode/common.h"
-#include "ode/contact.h"
 #include "ode/mass.h"
 #include "ode/objects.h"
-#include "ode/odeconfig.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlights.h"
@@ -19,12 +17,7 @@
 dWorldID world;
 dJointGroupID contactgroup;
 
-#define numObj 50  // 100 boxes, 100 spheres, 100 cylinders
-
-typedef struct PlayerBody {
-    dBodyID body;
-    dGeomID geom;
-} PlayerBody;
+#define numObj 0  // 100 boxes, 100 spheres, 100 cylinders
 
 // set a raylib model matrix from an ODE rotation matrix and position
 void setTransform(const float pos[3], const float R[12], Matrix* matrix)
@@ -114,8 +107,10 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
     for (i = 0; i < MAX_CONTACTS; i++) {
         contact[i].surface.mode = dContactBounce ;//| dContactSoftCFM;
         contact[i].surface.mu = dInfinity;
-        contact[i].surface.bounce = 0.1;
-        contact[i].surface.bounce_vel = 0.1;
+        contact[i].surface.mu2 = 0;
+        /*contact[i].surface.bounce = 0.5;*/
+        /*contact[i].surface.bounce_vel = 0.5;*/
+        //contact[i].surface.soft_cfm = 0.01;
     }
     int numc = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom,
                         sizeof(dContact));
@@ -131,13 +126,13 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
 
 }
 
-PlayerBody createPlayerBody(dSpaceID space, dWorldID world) {
+dBodyID createPlayerBody(dSpaceID space, dWorldID world) {
     dBodyID obj = dBodyCreate(world);
     dGeomID geom = dCreateCapsule(space, 0.5, 1.0);
     dMatrix3 R;
     dMass m;
 
-    dMassSetCapsuleTotal(&m, 1, 3, 0.5, 1.0);
+    dMassSetCapsuleTotal(&m, 1.0, 3, 0.5, 1.0);
 
     dBodySetMass(obj, &m);
     dGeomSetBody(geom, obj);
@@ -150,7 +145,16 @@ PlayerBody createPlayerBody(dSpaceID space, dWorldID world) {
     dBodySetMaxAngularSpeed(obj, 0);
     /*dBodySetDamping(obj, 0, 0);*/
 
-    return (PlayerBody){.body = obj, .geom = geom};
+    /*dGeomID ray = dCreateRay(space, .1f);*/
+    /*dGeomSetPosition(ray, 0, 5, 0);*/
+    /*dRFromAxisAndAngle(R, 1.0f, 0, 0, 90.0f*DEG2RAD);*/
+    /*dGeomSetRotation(ray, R);*/
+
+    /*dJointID joint = dJointCreateFixed (world,0);*/
+    /*dJointAttach (joint,obj,0);*/
+    /*dJointSetFixed (joint);*/
+
+    return obj;
 }
 
 void drawCylinder(dBodyID body, Model cylinder) {
@@ -280,7 +284,7 @@ int main(void)
         dBodySetRotation(obj[i], R);
     }
 
-    PlayerBody playerBody = createPlayerBody(space, world);
+    dBodyID playerBody = createPlayerBody(space, world);
 
     float CAMERA_FIRST_PERSON_MAX_CLAMP = -89.0f;
     float CAMERA_FIRST_PERSON_MIN_CLAMP = 89.0f;
@@ -293,6 +297,8 @@ int main(void)
     Vector3 vel = {.x = 0, .y = 0, .z = 0};
 
     dContactGeom contact;
+    dGeomID playerGeom = dBodyGetFirstGeom(playerBody);
+
     //--------------------------------------------------------------------------------------
     // Main game loop
     //--------------------------------------------------------------------------------------
@@ -331,16 +337,15 @@ int main(void)
                 if (lights[2].enabled) { DrawCube(lights[2].position,.2,.2,.2,GREEN); }
                 if (lights[3].enabled) { DrawCube(lights[3].position,.2,.2,.2,BLUE); }
 
-                int MOVE_GRAVITY = IsKeyDown(KEY_R);
-                int MOVE_JUMP = IsKeyDown(KEY_SPACE);
-                int MOVE_LEFT = IsKeyDown(KEY_D);
-                int MOVE_FRONT = IsKeyDown(KEY_W);
-                int MOVE_RIGHT = IsKeyDown(KEY_A);
-                int MOVE_BACK = IsKeyDown(KEY_S);
+                int spaceDown = IsKeyDown(KEY_SPACE);
+                int MOVE_L = IsKeyDown(KEY_D);
+                int MOVE_F = IsKeyDown(KEY_W);
+                int MOVE_R = IsKeyDown(KEY_A);
+                int MOVE_B = IsKeyDown(KEY_S);
 
                 for (int i = 0; i < numObj; i++) {
                     // apply force if the space key is held
-                    if (MOVE_GRAVITY) {
+                    if (spaceDown) {
                         dBodyAddForce(
                                 obj[i],
                                 dRandReal()*40-20,
@@ -373,25 +378,15 @@ int main(void)
                     }
                 }
 
-                int isJumping = dCollide(planeGeom, playerBody.geom, 1, &contact, sizeof(dContactGeom));
-                float * curVel = (float *) dBodyGetLinearVel(playerBody.body);
-
-                if (!MOVE_LEFT && !MOVE_RIGHT && !MOVE_FRONT && !MOVE_BACK) {
-                    dBodySetAngularVel(playerBody.body, 0,0,0);
-
-                    if (isJumping != 0) {
-                        dBodySetLinearVel(playerBody.body, 0, curVel[1], 0);
-                    } else {
-                        dBodySetLinearVel(playerBody.body, curVel[0], curVel[1], curVel[2]);
-                    }
+                if (!MOVE_L && !MOVE_R && !MOVE_F && !MOVE_B) {
+                    dBodySetAngularVel(playerBody, 0,0,0);
+                    dBodySetLinearVel(playerBody, 0, dBodyGetLinearVel(playerBody)[1],0);
                 }
 
-                if (isJumping != 0) {
+                if (dCollide(playerGeom, planeGeom, 1, &contact, sizeof(dContactGeom)) != 0) {
                     printf("player on floor\n");
-                    if (MOVE_JUMP) {
-                        dBodySetAngularVel(playerBody.body, 0, 0, 0);
-                        dBodySetLinearVel(playerBody.body, curVel[0], 6, curVel[2]);
-                        /*dBodyAddForce(playerBody.body, 0.0, 250.0, 0.0);*/
+                    if (spaceDown) {
+                        dBodyAddForce(playerBody, 0.0, 160.0, 0.0);
                     }
                 } else {
                     printf("player is flying\n");
@@ -399,28 +394,28 @@ int main(void)
 
                 // cameraaaaaaaaaaaaaaaaaaaa
 
-                vel.x = (sinf(angle.x)*MOVE_RIGHT -
-                        sinf(angle.x)*MOVE_LEFT -
-                        cosf(angle.x)*MOVE_FRONT +
-                        cosf(angle.x)*MOVE_BACK)/PLAYER_MOVEMENT_SENSITIVITY;
+                vel.x = (sinf(angle.x)*MOVE_R -
+                        sinf(angle.x)*MOVE_L -
+                        cosf(angle.x)*MOVE_F +
+                        cosf(angle.x)*MOVE_B)/PLAYER_MOVEMENT_SENSITIVITY;
 
-                vel.y = (sinf(angle.y)*MOVE_LEFT -
-                        sinf(angle.y)*MOVE_RIGHT)/PLAYER_MOVEMENT_SENSITIVITY;
+                vel.y = (sinf(angle.y)*MOVE_L -
+                        sinf(angle.y)*MOVE_R)/PLAYER_MOVEMENT_SENSITIVITY;
 
-                vel.z = (cosf(angle.x)*MOVE_RIGHT -
-                        cosf(angle.x)*MOVE_LEFT +
-                        sinf(angle.x)*MOVE_FRONT -
-                        sinf(angle.x)*MOVE_BACK)/PLAYER_MOVEMENT_SENSITIVITY;
+                vel.z = (cosf(angle.x)*MOVE_R -
+                        cosf(angle.x)*MOVE_L +
+                        sinf(angle.x)*MOVE_F -
+                        sinf(angle.x)*MOVE_B)/PLAYER_MOVEMENT_SENSITIVITY;
 
-                Vector3 veln = Vector3Multiply(Vector3Normalize(vel), (Vector3){10., 0., 10.});
-                dBodySetAngularVel(playerBody.body, veln.x, veln.y, veln.z);
+                Vector3 veln = Vector3Multiply(Vector3Normalize(vel), (Vector3){10., 10., 10.});
+                dBodySetAngularVel(playerBody, veln.x, veln.y, veln.z);
 
                 Vector2 mousePosition = GetMousePosition();
                 mousePositionDelta.x = mousePosition.x - previousMousePosition.x;
                 mousePositionDelta.y = mousePosition.y - previousMousePosition.y;
                 previousMousePosition = mousePosition;
 
-                float* pos = (float *) dBodyGetPosition(playerBody.body);
+                float* pos = (float *) dBodyGetPosition(playerBody);
                 camera.position = (Vector3){pos[0], pos[1], pos[2]};
 
                 // Camera orientation calculation
@@ -440,7 +435,7 @@ int main(void)
                 camera.target.y = camera.position.y - transform.m13;
                 camera.target.z = camera.position.z - transform.m14;
 
-                drawCylinder(playerBody.body, cylinder);
+                drawCylinder(playerBody, cylinder);
 
                 DrawModel(plane, (Vector3){0,0,0}, 1.0f, WHITE);
 
@@ -448,8 +443,7 @@ int main(void)
 
             DrawFPS(10, 10);
             DrawText("Keys RGB & L toggle lights", 10, 30, 20, WHITE);
-            DrawText("Key R to change objects gravity", 10, 50, 20, WHITE);
-            DrawText("Key WASD + Mouse to move", 10, 70, 20, WHITE);
+            DrawText("Space to add force", 10, 50, 20, WHITE);
 
         EndDrawing();
         //----------------------------------------------------------------------------------
