@@ -8,6 +8,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlights.h"
+#include <math.h>
 #include <ode/ode.h>
 
 // these are used by the collision callback, while they could be passed
@@ -141,6 +142,7 @@ dBodyID createPlayerBody(dSpaceID space, dWorldID world) {
     dBodySetRotation(obj, R);
 
     dBodySetMaxAngularSpeed(obj, 0);
+    /*dBodySetDamping(obj, 0, 0);*/
 
     return obj;
 }
@@ -274,11 +276,15 @@ int main(void)
 
     dBodyID playerBody = createPlayerBody(space, world);
 
+    float CAMERA_FIRST_PERSON_MAX_CLAMP = -89.0f;
+    float CAMERA_FIRST_PERSON_MIN_CLAMP = 89.0f;
     float CAMERA_MOUSE_MOVE_SENSITIVITY = 0.003f;
+    float CAMERA_FREE_PANNING_DIVIDER = 5.1f;
+    float PLAYER_MOVEMENT_SENSITIVITY = 20.0f;
     Vector2 mousePositionDelta = { 0.0f, 0.0f };
     Vector2 previousMousePosition = { 0.0f, 0.0f };
-    float AngleX = 0.f;
-    float AngleY = 0.f;
+    Vector2 angle = {.x = 0, .y = 0};
+    Vector3 vel = {.x = 0, .y = 0, .z = 0};
 
     //--------------------------------------------------------------------------------------
     // Main game loop
@@ -319,10 +325,10 @@ int main(void)
                 if (lights[3].enabled) { DrawCube(lights[3].position,.2,.2,.2,BLUE); }
 
                 int spaceDown = IsKeyDown(KEY_SPACE);
-                int upDown = IsKeyDown(KEY_W);
-                int leftDown = IsKeyDown(KEY_A);
-                int downDown = IsKeyDown(KEY_S);
-                int rightDown = IsKeyDown(KEY_D);
+                int MOVE_L = IsKeyDown(KEY_D);
+                int MOVE_F = IsKeyDown(KEY_W);
+                int MOVE_R = IsKeyDown(KEY_A);
+                int MOVE_B = IsKeyDown(KEY_S);
 
                 for (int i = 0; i < numObj; i++) {
                     // apply force if the space key is held
@@ -359,70 +365,53 @@ int main(void)
                     }
                 }
 
-                Vector2 mousePosition = GetMousePosition();
+                if (!MOVE_L && !MOVE_R && !MOVE_F && !MOVE_B) {
+                    dBodySetAngularVel(playerBody, 0,0,0);
+                    dBodySetLinearVel(playerBody, 0, dBodyGetLinearVel(playerBody)[1],0);
+                }
 
+                // cameraaaaaaaaaaaaaaaaaaaa
+
+                vel.x = (sinf(angle.x)*MOVE_R -
+                        sinf(angle.x)*MOVE_L -
+                        cosf(angle.x)*MOVE_F +
+                        cosf(angle.x)*MOVE_B)/PLAYER_MOVEMENT_SENSITIVITY;
+
+                vel.y = (sinf(angle.y)*MOVE_L -
+                        sinf(angle.y)*MOVE_R)/PLAYER_MOVEMENT_SENSITIVITY;
+
+                vel.z = (cosf(angle.x)*MOVE_R -
+                        cosf(angle.x)*MOVE_L +
+                        sinf(angle.x)*MOVE_F -
+                        sinf(angle.x)*MOVE_B)/PLAYER_MOVEMENT_SENSITIVITY;
+
+                Vector3 veln = Vector3Multiply(Vector3Normalize(vel), (Vector3){10., 10., 10.});
+                dBodySetAngularVel(playerBody, veln.x, veln.y, veln.z);
+
+                Vector2 mousePosition = GetMousePosition();
                 mousePositionDelta.x = mousePosition.x - previousMousePosition.x;
                 mousePositionDelta.y = mousePosition.y - previousMousePosition.y;
                 previousMousePosition = mousePosition;
 
-                AngleX += (mousePositionDelta.x*-CAMERA_MOUSE_MOVE_SENSITIVITY);
-                AngleY += (mousePositionDelta.y*-CAMERA_MOUSE_MOVE_SENSITIVITY);
+                float* pos = (float *) dBodyGetPosition(playerBody);
+                camera.position = (Vector3){pos[0], pos[1], pos[2]};
 
-                float rotateVel = 0.0;
-                float accelVel = 0.0;
+                // Camera orientation calculation
+                angle.x += (mousePositionDelta.x*-CAMERA_MOUSE_MOVE_SENSITIVITY);
+                angle.y += (mousePositionDelta.y*-CAMERA_MOUSE_MOVE_SENSITIVITY);
 
-                if (upDown) {
-                    accelVel = 15;
-                }
+                // Angle clamp
+                if (angle.y > CAMERA_FIRST_PERSON_MIN_CLAMP*DEG2RAD) angle.y = CAMERA_FIRST_PERSON_MIN_CLAMP*DEG2RAD;
+                else if (angle.y < CAMERA_FIRST_PERSON_MAX_CLAMP*DEG2RAD) angle.y = CAMERA_FIRST_PERSON_MAX_CLAMP*DEG2RAD;
 
-                if (downDown) {
-                    accelVel = -15;
-                }
+                // Recalculate camera target considering translation and rotation
+                Matrix translation = MatrixTranslate(0, 0, (1.0f/CAMERA_FREE_PANNING_DIVIDER));
+                Matrix rotation = MatrixRotateXYZ((Vector3){ PI*2 - angle.y, PI*2 - angle.x, 0 });
+                Matrix transform = MatrixMultiply(translation, rotation);
 
-                if (leftDown) {
-                    rotateVel = 0.1;
-                }
-
-                if (rightDown) {
-                    rotateVel = -0.1;
-                }
-
-                /*if (!upDown && !downDown && !leftDown && !rightDown) {*/
-                    /*dBodySetAngularVel(playerBody, 0,0,0);*/
-                    /*dBodySetLinearVel(playerBody, 0, dBodyGetLinearVel(playerBody)[1],0);*/
-                /*}*/
-
-                // Moving forward and backward
-                dBodyEnable (playerBody); // case its gone to sleep
-                float* qtpos = (float *) dBodyGetQuaternion(playerBody);
-                Quaternion q = {
-                    .w = qtpos[0],
-                    .x = qtpos[1],
-                    .y = qtpos[2],
-                    .z = qtpos[3],
-                };
-                Vector3 vel = Vector3RotateByQuaternion((Vector3){accelVel*cos(1), 0, accelVel*sin(1)}, q);
-                dBodySetAngularVel(playerBody, vel.x, vel.y, vel.z);
-
-                //Rotating left and right
-                dBodyEnable (playerBody); // case its gone to sleep
-                float* qt = (float *) dBodyGetQuaternion(playerBody);
-                Quaternion qt1 = {.w = qt[0], .x = qt[1], .y = qt[2], .z = qt[3]};
-                Quaternion qt2 = QuaternionFromAxisAngle((Vector3){0, 0, 1}, rotateVel);
-                Quaternion qt3 = QuaternionMultiply(qt1, qt2);
-
-                float qt4[4] = {qt3.w, qt3.x, qt3.y, qt3.z};
-                dBodySetQuaternion(playerBody, qt4);
-
-                /*float* pos = (float *) dBodyGetPosition(playerBody);*/
-                /*float* rot = (float *) dBodyGetQuaternion(playerBody);*/
-                /*camera.position = (Vector3){pos[0], pos[1], pos[2]};*/
-                /*Matrix translation = MatrixTranslate(0, 0, 1);*/
-                /*Matrix rotation = MatrixRotateXYZ((Vector3){ PI*2 - rot[2], PI*2 - rot[1], 0 });*/
-                /*Matrix transform = MatrixMultiply(translation, rotation);*/
-                /*camera.target.x = camera.position.x - transform.m12;*/
-                /*camera.target.y = camera.position.y - transform.m13;*/
-                /*camera.target.z = camera.position.z - transform.m14;*/
+                camera.target.x = camera.position.x - transform.m12;
+                camera.target.y = camera.position.y - transform.m13;
+                camera.target.z = camera.position.z - transform.m14;
 
                 drawCylinder(playerBody, cylinder);
 

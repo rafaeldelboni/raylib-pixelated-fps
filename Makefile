@@ -7,6 +7,11 @@ debug:
 	make --no-print-directory -C build/debug
 .PHONY: debug
 
+derun:
+	make --no-print-directory -C build/debug
+	./build/debug/bin/ode_app
+.PHONY: debug
+
 release:
 	make --no-print-directory -C build/release
 .PHONY: release
