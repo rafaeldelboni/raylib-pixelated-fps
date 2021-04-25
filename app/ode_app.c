@@ -20,7 +20,7 @@
 dWorldID world;
 dJointGroupID contactgroup;
 
-#define numObj 0  // 100 boxes, 100 spheres, 100 cylinders
+#define numObj 200  // 100 boxes, 100 spheres, 100 cylinders
 
 typedef struct PlayerBody {
     dBodyID body;
@@ -115,7 +115,7 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
     for (i = 0; i < MAX_CONTACTS; i++) {
         contact[i].surface.mode = dContactBounce ;//| dContactSoftCFM;
         contact[i].surface.mu = dInfinity;
-        contact[i].surface.bounce = 0.1;
+        contact[i].surface.bounce = 0.0;
         contact[i].surface.bounce_vel = 0.1;
     }
     int numc = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom,
@@ -163,56 +163,12 @@ void drawCylinder(dBodyID body, Model cylinder) {
     DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);
 }
 
-static dGeomID wall_boxes[120];
-static dBodyID wall_bodies[120];
-int wb = 0;
-
-void createWallBoxes(dSpaceID space, dWorldID world) {
-    float WBOXSIZE = 1.0; // size of wall boxes
-    float WALLMASS = 1; // mass of the box
-    float WALLWIDTH = 12; // width of wall
-    float WALLHEIGHT = 10; // height of wall
-    bool offset = false;
-    static dMass m;
-
-    for (dReal z = WBOXSIZE/2.0; z <= WALLHEIGHT; z+=WBOXSIZE)
-    {
-        offset = !offset;
-        for (dReal y = (-WALLWIDTH+z)/2; y <= (WALLWIDTH-z)/2; y+=WBOXSIZE)
-        {
-            wall_bodies[wb] = dBodyCreate (world);
-            dBodySetPosition (wall_bodies[wb],-60,y,z);
-            dMassSetBox (&m,1,WBOXSIZE,WBOXSIZE,WBOXSIZE);
-            dMassAdjust (&m, WALLMASS);
-            dBodySetMass (wall_bodies[wb],&m);
-            wall_boxes[wb] = dCreateBox (space,WBOXSIZE,WBOXSIZE,WBOXSIZE);
-            dGeomSetBody (wall_boxes[wb],wall_bodies[wb]);
-            //dBodyDisable(wall_bodies[wb++]);
-            wb++;
-        }
-    }
-}
-
-void drawWallBoxes(Model box) {
-    for (int i = 0; i < wb; i++)
-    {
-        dBodyID body = dGeomGetBody(wall_boxes[i]);
-
-        setTransform(
-                (float *) dBodyGetPosition(body),
-                (float *) dBodyGetRotation(body),
-                &box.transform);
-
-        DrawModel(box, (Vector3){0,0,0}, 1.0f, WHITE);
-    }
-}
-
 dBodyID bullet_body;
 dGeomID bullet_geom;
 
 void createBullet(dSpaceID space, dWorldID world) {
-    float BULLET_MASS = 10;
-    float BULLET_RADIUS = 0.1;
+    float BULLET_MASS = 5;
+    float BULLET_RADIUS = 0.05;
     static dMass m;
     bullet_body = dBodyCreate (world);
     bullet_geom = dCreateSphere (space,BULLET_RADIUS);
@@ -245,7 +201,8 @@ int main(void)
 
     Model box = LoadModelFromMesh(GenMeshCube(1,1,1));
     Model ball = LoadModelFromMesh(GenMeshSphere(.5,32,32));
-    Model bullet = LoadModelFromMesh(GenMeshSphere(.1,32,32));
+    Model bullet = LoadModelFromMesh(GenMeshSphere(.05,32,32));
+    Model aim = LoadModelFromMesh(GenMeshSphere(.005,32,32));
     Model cylinder = LoadModelFromMesh(GenMeshCylinder(.5,1,32));
     Model plane = LoadModel("resources/grass-plane.obj"); // Load the animated model mesh and basic data
 
@@ -255,6 +212,7 @@ int main(void)
 
     box.materials[0].maps[MAP_DIFFUSE].texture = texture;
     ball.materials[0].maps[MAP_DIFFUSE].texture = texture;
+    bullet.materials[0].maps[MAP_DIFFUSE].texture = texture;
     cylinder.materials[0].maps[MAP_DIFFUSE].texture = texture;
     plane.materials[0].maps[MAP_DIFFUSE].texture = texturePlane;
 
@@ -343,7 +301,6 @@ int main(void)
 
     PlayerBody playerBody = createPlayerBody(space, world);
     createBullet(space, world);
-    createWallBoxes(space, world);
 
     float CAMERA_FIRST_PERSON_MAX_CLAMP = -89.0f;
     float CAMERA_FIRST_PERSON_MIN_CLAMP = 89.0f;
@@ -403,7 +360,7 @@ int main(void)
                 int SHOOT = IsMouseButtonPressed(MOUSE_LEFT_BUTTON);
 
                 for (int i = 0; i < numObj; i++) {
-                    // apply force if the space key is held
+                    // apply force if the z key is held
                     if (MOVE_GRAVITY) {
                         dBodyAddForce(
                                 obj[i],
@@ -416,7 +373,7 @@ int main(void)
                     float* pos = (float *) dBodyGetPosition(obj[i]);
                     float* rot = (float *) dBodyGetRotation(obj[i]);
 
-                    if(fabs(pos[0]) > 45 || fabs(pos[2]) > 45) {
+                    if(fabs(pos[0]) > 100 || fabs(pos[2]) > 100) {
                         // teleport back if too far away
                         dBodySetPosition(obj[i], dRandReal() * 10 - 5,
                                                 8, dRandReal() * 10 - 5);
@@ -456,11 +413,10 @@ int main(void)
                         printf("player on floor %f, %f, %f\n", pos[0], pos[1], pos[2]);
                         dBodySetAngularVel(playerBody.body, 0, 0, 0);
                         dBodySetLinearVel(playerBody.body, curVel[0], 6, curVel[2]);
-                        /*dBodyAddForce(playerBody.body, 0.0, 250.0, 0.0);*/
                     }
                 }
 
-                // cameraaaaaaaaaaaaaaaaaaaa
+                // camera
 
                 vel.x = (sinf(angle.x)*MOVE_RIGHT -
                         sinf(angle.x)*MOVE_LEFT -
@@ -495,7 +451,7 @@ int main(void)
                 else if (angle.y < CAMERA_FIRST_PERSON_MAX_CLAMP*DEG2RAD) angle.y = CAMERA_FIRST_PERSON_MAX_CLAMP*DEG2RAD;
 
                 // Recalculate camera target considering translation and rotation
-                Matrix translation = MatrixTranslate(0, 0, (1.0f/CAMERA_FREE_PANNING_DIVIDER));
+                Matrix translation = MatrixTranslate(0, 0, (3.5f/CAMERA_FREE_PANNING_DIVIDER));
                 Matrix rotation = MatrixRotateXYZ((Vector3){ PI*2 - angle.y, PI*2 - angle.x, 0 });
                 Matrix transform = MatrixMultiply(translation, rotation);
 
@@ -503,49 +459,35 @@ int main(void)
                 camera.target.y = camera.position.y - transform.m13;
                 camera.target.z = camera.position.z - transform.m14;
 
+                // camera
+
+                DrawModel(aim, camera.target, 1.0f, WHITE);
+
                 if (SHOOT) {
-                    dMatrix3 R2,R3,R4;
-                    dRFromAxisAndAngle (R2,0,0,1,PI - angle.y);
-                    dRFromAxisAndAngle (R3,0,1,0,PI - angle.x);
-                    dMultiply0 (R4,R2,R3,3,3,3);
-                    dReal cpos[3] = {camera.target.x,camera.target.y,camera.target.z};
-                    for (int i=0; i<3; i++) cpos[i] += 3*R4[i*4+2];
-                    dBodySetPosition (bullet_body,cpos[0],cpos[1],cpos[2]);
-                    dReal force = 10;
-                    dBodySetLinearVel (bullet_body,force*R4[2],force*R4[6],force*R4[10]);
+                    float x = PI*2 - angle.x;
+                    float y = PI*2 - angle.y;
+
+                    Vector3 aimv;
+                    aimv.x = sinf(x) * cosf(y);
+                    aimv.y = sinf(y);
+                    aimv.z = cosf(x) * cosf(y);
+
                     dBodySetAngularVel (bullet_body,0,0,0);
-
-                    /*printf("angle: x%f, y%f | x%f, y%f \n", PI*2 - angle.y, PI*2 - angle.x, translation.m12, translation.m13);*/
-
-                    /*dMatrix3 R2,R3,R4;*/
-                    /*dRFromAxisAndAngle (R2,0,0,1,angle.y-PI);*/
-                    /*dRFromAxisAndAngle (R3,0,1,0,angle.x-PI);*/
-                    /*dMultiply0 (R4,R2,R3,3,3,3);*/
-                    /*dReal cpos[3] = {camera.position.x,camera.position.y,camera.position.z};*/
-                    /*for (int i=0; i<3; i++) cpos[i] += 3*R4[i*4+2];*/
-                    /*dBodySetPosition (bullet_body,cpos[0],cpos[1],cpos[2]);*/
-                    /*dReal force = 50;*/
-                    /*dBodySetLinearVel (bullet_body,force*transform.m2,force*transform.m6,force*transform.m10);*/
-                    /*dBodySetAngularVel (bullet_body,0,0,0);*/
-
-                    /*Vector3 velb;*/
-                    /*dBodySetPosition (bullet_body,camera.target.x,camera.target.y,camera.target.z);*/
-                    /*velb.x = 1;//cosf(angle.x);*/
-                    /*velb.y = sinf(angle.y);//sinf(angle.y);*/
-                    /*velb.z = 1;//sinf(angle.x);*/
-                    /*printf("angle: x%f, y%f | x%f, y%f \n", angle.y,  angle.x, sinf(angle.x), sinf(angle.y));*/
-                    /*Vector3 velnb = Vector3Multiply(Vector3Normalize(velb), (Vector3){50., 50., 50.});*/
-                    /*dBodySetLinearVel(bullet_body, velnb.x, velnb.y, velnb.z);*/
-                    /*dBodySetAngularVel (bullet_body,0,0,0);*/
+                    dBodySetPosition (bullet_body, camera.target.x, camera.target.y, camera.target.z);
+                    Vector3 velbn = Vector3Multiply(Vector3Normalize(aimv), (Vector3){100., -100., -100.});
+                    dBodySetLinearVel(bullet_body, velbn.x, velbn.y, velbn.z);
                 }
+
+                // bullet
                 float* posBul = (float *) dBodyGetPosition(bullet_body);
                 float* rotBul = (float *) dBodyGetRotation(bullet_body);
                 setTransform(posBul, rotBul, &bullet.transform);
                 DrawModel(bullet, (Vector3){0,0,0}, 1.0f, WHITE);
 
-                drawWallBoxes(box);
+                // player body
                 drawCylinder(playerBody.body, cylinder);
 
+                // terrain
                 DrawModel(plane, (Vector3){0,0,0}, 1.0f, WHITE);
 
             EndMode3D();
@@ -566,6 +508,7 @@ int main(void)
     UnloadModel(ball);
     UnloadModel(plane);
     UnloadModel(bullet);
+    UnloadModel(aim);
     UnloadTexture(texture);
     UnloadTexture(texturePlane);
 
