@@ -135,10 +135,11 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
 
     dContact contact[MAX_CONTACTS]; // up to MAX_CONTACTS contacts per body-body
     for (i = 0; i < MAX_CONTACTS; i++) {
-        contact[i].surface.mode = dContactBounce ;//| dContactSoftCFM;
+        contact[i].surface.mode = dContactBounce | dContactSoftCFM | dContactApprox1;//| dContactSoftCFM;
         contact[i].surface.mu = dInfinity;
         contact[i].surface.bounce = 0.0;
         contact[i].surface.bounce_vel = 0.1;
+        contact[i].surface.soft_cfm = 0.01;
     }
     int numc = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom,
                         sizeof(dContact));
@@ -146,8 +147,7 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
         dMatrix3 RI;
         dRSetIdentity(RI);
         for (i = 0; i < numc; i++) {
-            dJointID c =
-                dJointCreateContact(world, contactgroup, contact + i);
+            dJointID c = dJointCreateContact(world, contactgroup, contact + i);
             dJointAttach(c, b1, b2);
         }
     }
@@ -192,7 +192,7 @@ dBodyID createBullet(dSpaceID space, dWorldID world) {
     dBodyID obj = dBodyCreate(world);
     dGeomID geom;
     dMass m;
-    geom = dCreateSphere(space,0.5);
+    geom = dCreateSphere(space,0.05);
     dMassSetSphereTotal(&m, 1, 0.05);
     dGeomSetBody(geom, obj);
     dGeomSetCategoryBits (geom, catBits[PLAYER_BULLET]);
@@ -226,7 +226,7 @@ int main(void)
 
     Model box = LoadModelFromMesh(GenMeshCube(1,1,1));
     Model ball = LoadModelFromMesh(GenMeshSphere(.5,32,32));
-    Model bullet = LoadModelFromMesh(GenMeshSphere(.05,32,32));
+    Model bullet = LoadModelFromMesh(GenMeshSphere(0.05,32,32));
     Model aim = LoadModelFromMesh(GenMeshSphere(.0025,32,32));
     Model cylinder = LoadModelFromMesh(GenMeshCylinder(.5,1,32));
     Model plane = LoadModel("resources/grass-plane.obj"); // Load the animated model mesh and basic data
