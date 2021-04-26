@@ -21,11 +21,33 @@ dWorldID world;
 dJointGroupID contactgroup;
 
 #define numObj 200  // 100 boxes, 100 spheres, 100 cylinders
+#define numBullets 50  // max bullets
+
+int current_bullet = 0;
 
 typedef struct PlayerBody {
     dBodyID body;
     dGeomID geom;
 } PlayerBody;
+
+enum INDEX
+{
+  PLANE = 0,
+  PLAYER,
+  OBJS,
+  PLAYER_BULLET,
+  ALL,
+  LAST_INDEX_CNT
+};
+
+const int catBits[LAST_INDEX_CNT] =
+{
+    0x0001, ///< Plane category >          0001
+    0x0002, ///< Player category >         0010
+    0x0004, ///< Objects category >        0100
+    0x0008, ///< Player bullets category > 1000
+    ~0L     ///< All categories >          11111111111111111111111111111111
+};
 
 // set a raylib model matrix from an ODE rotation matrix and position
 void setTransform(const float pos[3], const float R[12], Matrix* matrix)
@@ -150,6 +172,9 @@ PlayerBody createPlayerBody(dSpaceID space, dWorldID world) {
     dBodySetMaxAngularSpeed(obj, 0);
     /*dBodySetDamping(obj, 0, 0);*/
 
+    dGeomSetCategoryBits (geom, catBits[PLAYER]);
+    dGeomSetCollideBits (geom, catBits[ALL] & (~catBits[PLAYER_BULLET]));
+
     return (PlayerBody){.body = obj, .geom = geom};
 }
 
@@ -163,19 +188,18 @@ void drawCylinder(dBodyID body, Model cylinder) {
     DrawModel(cylinder, (Vector3){0,0,0}, 1.0f, WHITE);
 }
 
-dBodyID bullet_body;
-dGeomID bullet_geom;
-
-void createBullet(dSpaceID space, dWorldID world) {
-    float BULLET_MASS = 5;
-    float BULLET_RADIUS = 0.05;
-    static dMass m;
-    bullet_body = dBodyCreate (world);
-    bullet_geom = dCreateSphere (space,BULLET_RADIUS);
-    dMassSetSphereTotal (&m,BULLET_MASS,BULLET_RADIUS);
-    dBodySetMass (bullet_body,&m);
-    dGeomSetBody (bullet_geom,bullet_body);
-    dBodySetPosition (bullet_body,0, 0,BULLET_RADIUS);
+dBodyID createBullet(dSpaceID space, dWorldID world) {
+    dBodyID obj = dBodyCreate(world);
+    dGeomID geom;
+    dMass m;
+    geom = dCreateSphere(space,0.5);
+    dMassSetSphereTotal(&m, 1, 0.05);
+    dGeomSetBody(geom, obj);
+    dGeomSetCategoryBits (geom, catBits[PLAYER_BULLET]);
+    dGeomSetCollideBits (geom, catBits[ALL] & (~catBits[PLAYER]) & (~catBits[PLAYER_BULLET]));
+    dBodySetMass(obj, &m);
+    dBodyDisable(obj);
+    return obj;
 }
 
 int main(void)
@@ -191,6 +215,7 @@ int main(void)
 
     // create an array of bodies
     dBodyID obj[numObj];
+    dBodyID bullets[numBullets];
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);  // Enable Multi Sampling Anti Aliasing 4x (if available)
     InitWindow(screenWidth, screenHeight, "raylib [models] example - simple lighting material");
@@ -212,7 +237,6 @@ int main(void)
 
     box.materials[0].maps[MAP_DIFFUSE].texture = texture;
     ball.materials[0].maps[MAP_DIFFUSE].texture = texture;
-    bullet.materials[0].maps[MAP_DIFFUSE].texture = texture;
     cylinder.materials[0].maps[MAP_DIFFUSE].texture = texture;
     plane.materials[0].maps[MAP_DIFFUSE].texture = texturePlane;
 
@@ -228,7 +252,7 @@ int main(void)
     // models share the same shader
     box.materials[0].shader = shader;
     ball.materials[0].shader = shader;
-    bullet.materials[0].shader = shader;
+    /*bullet.materials[0].shader = shader;*/
     plane.materials[0].shader = shader;
 
     // using 4 point lights, white, red, green and blue
@@ -264,6 +288,8 @@ int main(void)
                             groundInd, nV,
                             3 * sizeof(int));
     dGeomID planeGeom = dCreateTriMesh(space, triData, NULL, NULL, NULL);
+    dGeomSetCategoryBits (planeGeom, catBits[PLANE]);
+    dGeomSetCollideBits (planeGeom, catBits[ALL]);
 
     // create the physics bodies
     for (int i = 0; i < numObj; i++) {
@@ -282,6 +308,8 @@ int main(void)
 
         // set the bodies mass and the newly created geometry
         dGeomSetBody(geom, obj[i]);
+        dGeomSetCategoryBits (geom, catBits[OBJS]);
+        dGeomSetCollideBits (geom, catBits[ALL]);
         dBodySetMass(obj[i], &m);
 
         // give the body a random position and rotation
@@ -299,8 +327,11 @@ int main(void)
         dBodySetRotation(obj[i], R);
     }
 
+    for (int i = 0; i < numBullets; i++) {
+        bullets[i] = createBullet(space, world);
+    }
+
     PlayerBody playerBody = createPlayerBody(space, world);
-    createBullet(space, world);
 
     float CAMERA_FIRST_PERSON_MAX_CLAMP = -89.0f;
     float CAMERA_FIRST_PERSON_MIN_CLAMP = 89.0f;
@@ -451,7 +482,7 @@ int main(void)
                 else if (angle.y < CAMERA_FIRST_PERSON_MAX_CLAMP*DEG2RAD) angle.y = CAMERA_FIRST_PERSON_MAX_CLAMP*DEG2RAD;
 
                 // Recalculate camera target considering translation and rotation
-                Matrix translation = MatrixTranslate(0, 0, (3.5f/CAMERA_FREE_PANNING_DIVIDER));
+                Matrix translation = MatrixTranslate(0, 0, (2.f/CAMERA_FREE_PANNING_DIVIDER));
                 Matrix rotation = MatrixRotateXYZ((Vector3){ PI*2 - angle.y, PI*2 - angle.x, 0 });
                 Matrix transform = MatrixMultiply(translation, rotation);
 
@@ -464,6 +495,9 @@ int main(void)
                 DrawModel(aim, camera.target, 1.0f, WHITE);
 
                 if (SHOOT) {
+                    dBodyID current_bullet_body = bullets[current_bullet % numBullets];
+                    dBodyEnable(current_bullet_body);
+
                     float x = PI*2 - angle.x;
                     float y = PI*2 - angle.y;
 
@@ -472,17 +506,22 @@ int main(void)
                     aimv.y = sinf(y);
                     aimv.z = cosf(x) * cosf(y);
 
-                    dBodySetAngularVel (bullet_body,0,0,0);
-                    dBodySetPosition (bullet_body, camera.target.x, camera.target.y, camera.target.z);
+                    dBodySetAngularVel (current_bullet_body,0,0,0);
+                    dBodySetPosition (current_bullet_body, camera.target.x, camera.target.y, camera.target.z);
                     Vector3 velbn = Vector3Multiply(Vector3Normalize(aimv), (Vector3){100., -100., -100.});
-                    dBodySetLinearVel(bullet_body, velbn.x, velbn.y, velbn.z);
+                    dBodySetLinearVel(current_bullet_body, velbn.x, velbn.y, velbn.z);
+                    current_bullet++;
                 }
 
-                // bullet
-                float* posBul = (float *) dBodyGetPosition(bullet_body);
-                float* rotBul = (float *) dBodyGetRotation(bullet_body);
-                setTransform(posBul, rotBul, &bullet.transform);
-                DrawModel(bullet, (Vector3){0,0,0}, 1.0f, WHITE);
+
+                // draw bullets
+                for (int i = 0; i < numBullets; i++) {
+                    dBodyID current_bullet_body = bullets[i];
+                    float* posBul = (float *) dBodyGetPosition(current_bullet_body);
+                    float* rotBul = (float *) dBodyGetRotation(current_bullet_body);
+                    setTransform(posBul, rotBul, &bullet.transform);
+                    DrawModel(bullet, (Vector3){0,0,0}, 1.0f, WHITE);
+                }
 
                 // player body
                 drawCylinder(playerBody.body, cylinder);
