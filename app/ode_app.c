@@ -135,11 +135,12 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
 
     dContact contact[MAX_CONTACTS]; // up to MAX_CONTACTS contacts per body-body
     for (i = 0; i < MAX_CONTACTS; i++) {
-        contact[i].surface.mode = dContactBounce | dContactSoftCFM | dContactApprox1;//| dContactSoftCFM;
+        /*contact[i].surface.mode = dContactBounce | dContactSoftCFM | dContactApprox1;*/
+        contact[i].surface.mode = dContactBounce;
         contact[i].surface.mu = dInfinity;
         contact[i].surface.bounce = 0.0;
         contact[i].surface.bounce_vel = 0.1;
-        contact[i].surface.soft_cfm = 0.01;
+        /*contact[i].surface.soft_cfm = 0.01;*/
     }
     int numc = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom,
                         sizeof(dContact));
@@ -192,8 +193,8 @@ dBodyID createBullet(dSpaceID space, dWorldID world) {
     dBodyID obj = dBodyCreate(world);
     dGeomID geom;
     dMass m;
-    geom = dCreateSphere(space,0.05);
-    dMassSetSphereTotal(&m, 1, 0.05);
+    geom = dCreateSphere(space,0.1);
+    dMassSetSphereTotal(&m, 10, 0.1);
     dGeomSetBody(geom, obj);
     dGeomSetCategoryBits (geom, catBits[PLAYER_BULLET]);
     dGeomSetCollideBits (geom, catBits[ALL] & (~catBits[PLAYER]) & (~catBits[PLAYER_BULLET]));
@@ -226,8 +227,8 @@ int main(void)
 
     Model box = LoadModelFromMesh(GenMeshCube(1,1,1));
     Model ball = LoadModelFromMesh(GenMeshSphere(.5,32,32));
-    Model bullet = LoadModelFromMesh(GenMeshSphere(0.05,32,32));
-    Model aim = LoadModelFromMesh(GenMeshSphere(.0025,32,32));
+    Model bullet = LoadModelFromMesh(GenMeshSphere(0.1,32,32));
+    Model aim = LoadModelFromMesh(GenMeshSphere(.003,32,32));
     Model cylinder = LoadModelFromMesh(GenMeshCylinder(.5,1,32));
     Model plane = LoadModel("resources/grass-plane.obj"); // Load the animated model mesh and basic data
 
@@ -344,6 +345,7 @@ int main(void)
     Vector3 vel = {.x = 0, .y = 0, .z = 0};
 
     dContactGeom contact;
+
     //--------------------------------------------------------------------------------------
     // Main game loop
     //--------------------------------------------------------------------------------------
@@ -438,6 +440,7 @@ int main(void)
                 }
 
                 int isJumping = dCollide(planeGeom, playerBody.geom, 1, &contact, sizeof(dContactGeom));
+
                 float * curVel = (float *) dBodyGetLinearVel(playerBody.body);
 
                 if (!MOVE_LEFT && !MOVE_RIGHT && !MOVE_FRONT && !MOVE_BACK) {
@@ -513,7 +516,7 @@ int main(void)
                     dBodySetAngularVel (current_bullet_body,0,0,0);
                     dBodySetPosition (current_bullet_body, aim_vector.x, aim_vector.y, aim_vector.z);
 
-                    Vector3 velbn = Vector3Multiply(Vector3Normalize(aimv), (Vector3){100., -100., -100.});
+                    Vector3 velbn = Vector3Multiply(Vector3Normalize(aimv), (Vector3){75., -75., -75.});
                     dBodySetLinearVel(current_bullet_body, velbn.x, velbn.y, velbn.z);
                     current_bullet++;
                 }
