@@ -227,7 +227,7 @@ int main(void)
     Model box = LoadModelFromMesh(GenMeshCube(1,1,1));
     Model ball = LoadModelFromMesh(GenMeshSphere(.5,32,32));
     Model bullet = LoadModelFromMesh(GenMeshSphere(.05,32,32));
-    Model aim = LoadModelFromMesh(GenMeshSphere(.005,32,32));
+    Model aim = LoadModelFromMesh(GenMeshSphere(.0025,32,32));
     Model cylinder = LoadModelFromMesh(GenMeshCylinder(.5,1,32));
     Model plane = LoadModel("resources/grass-plane.obj"); // Load the animated model mesh and basic data
 
@@ -376,6 +376,18 @@ int main(void)
             ClearBackground(BLACK);
 
             BeginMode3D(camera);
+                float x = PI*2 - angle.x;
+                float y = PI*2 - angle.y;
+
+                Vector3 aimv;
+                aimv.x = sinf(x) * cosf(y);
+                aimv.y = sinf(y);
+                aimv.z = cosf(x) * cosf(y);
+
+                Vector3 aim_vector = Vector3Add(camera.position, Vector3Multiply(aimv, (Vector3){1, -1, -1}));
+
+                DrawModel(aim, aim_vector, 1.0f, RED);
+
                 // draw markers to show where the lights are
                 if (lights[0].enabled) { DrawCube(lights[0].position,.2,.2,.2,WHITE); }
                 if (lights[1].enabled) { DrawCube(lights[1].position,.2,.2,.2,RED); }
@@ -492,22 +504,15 @@ int main(void)
 
                 // camera
 
-                DrawModel(aim, camera.target, 1.0f, WHITE);
+                /*DrawModel(aim, camera.target, 1.0f, WHITE);*/
 
                 if (SHOOT) {
                     dBodyID current_bullet_body = bullets[current_bullet % numBullets];
                     dBodyEnable(current_bullet_body);
 
-                    float x = PI*2 - angle.x;
-                    float y = PI*2 - angle.y;
-
-                    Vector3 aimv;
-                    aimv.x = sinf(x) * cosf(y);
-                    aimv.y = sinf(y);
-                    aimv.z = cosf(x) * cosf(y);
-
                     dBodySetAngularVel (current_bullet_body,0,0,0);
-                    dBodySetPosition (current_bullet_body, camera.target.x, camera.target.y, camera.target.z);
+                    dBodySetPosition (current_bullet_body, aim_vector.x, aim_vector.y, aim_vector.z);
+
                     Vector3 velbn = Vector3Multiply(Vector3Normalize(aimv), (Vector3){100., -100., -100.});
                     dBodySetLinearVel(current_bullet_body, velbn.x, velbn.y, velbn.z);
                     current_bullet++;
