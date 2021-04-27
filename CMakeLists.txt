@@ -1,6 +1,6 @@
 # Setup
 cmake_minimum_required(VERSION 3.17)
-project(RaylibPixelatedFps)
+project(RaylibOdeFps)
 include(CTest)
 include(FetchContent)
 set(FETCHCONTENT_QUIET 0)
