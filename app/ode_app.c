@@ -1,10 +1,3 @@
-#include "ode/collision.h"
-#include "ode/common.h"
-#include "ode/contact.h"
-#include "ode/mass.h"
-#include "ode/misc.h"
-#include "ode/objects.h"
-#include "ode/odeconfig.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlights.h"
@@ -58,16 +51,20 @@ enum INDEX
   PLAYER,
   OBJS,
   PLAYER_BULLET,
+  ENEMY,
+  ENEMY_BULLET,
   ALL,
   LAST_INDEX_CNT
 };
 
 const int catBits[LAST_INDEX_CNT] =
 {
-    0x0001, ///< Plane category >          0001
-    0x0002, ///< Player category >         0010
-    0x0004, ///< Objects category >        0100
-    0x0008, ///< Player bullets category > 1000
+    0x0001, ///< Plane category >          000001
+    0x0002, ///< Player category >         000010
+    0x0004, ///< Objects category >        000100
+    0x0008, ///< Player bullets category > 001000
+    0x0010, ///< Enemy category >          010000
+    0x0020, ///< Enemy bullets category >  100000
     ~0L     ///< All categories >          11111111111111111111111111111111
 };
 
@@ -139,6 +136,39 @@ PlayerBody createPlayerBody(dSpaceID space, dWorldID world) {
     // collision mask
     dGeomSetCategoryBits (geom, catBits[PLAYER]);
     dGeomSetCollideBits (geom, catBits[ALL] & (~catBits[PLAYER_BULLET]));
+
+    return (PlayerBody){.body = obj, .geom = geom, .footGeom = footGeom};
+}
+
+PlayerBody createEnemyBody(dSpaceID space, dWorldID world) {
+    dMass m;
+    dMatrix3 R;
+    dBodyID obj = dBodyCreate(world);
+    dGeomID geom = dCreateCapsule(space, 0.5, 1.0);
+
+    // foot sphere is a disabled geometry just for checking collisions
+    dGeomID footGeom = dCreateSphere(space, 0.75);
+    dGeomDisable(footGeom);
+
+    // capsule torso
+    dMassSetCapsuleTotal(&m, 1, 3, 0.5, 1.0);
+    dBodySetMass(obj, &m);
+    dGeomSetBody(geom, obj);
+
+    // foot sphere
+    dGeomSetBody(footGeom, obj);
+    dGeomSetOffsetPosition(footGeom, 0, 0, 0.5);
+
+    // give the body a position and rotation
+    dBodySetPosition(obj, -62, 5, 15);
+    dRFromAxisAndAngle(R, 1.0f, 0, 0, 90.0f*DEG2RAD);
+    dBodySetRotation(obj, R);
+
+    dBodySetMaxAngularSpeed(obj, 0);
+
+    // collision mask
+    dGeomSetCategoryBits (geom, catBits[ENEMY]);
+    dGeomSetCollideBits (geom, catBits[ALL] & (~catBits[ENEMY_BULLET]));
 
     return (PlayerBody){.body = obj, .geom = geom, .footGeom = footGeom};
 }
@@ -431,9 +461,6 @@ int main(void)
     lights[3] = CreateLight(LIGHT_POINT, (Vector3){ -25,25,25 }, Vector3Zero(),
                     BLUE, shader);
 
-    // Set camera mode
-    SetCameraMode(camera, CAMERA_CUSTOM);
-
     // Set our game to run at 60 frames-per-second
     SetTargetFPS(60);
 
@@ -476,8 +503,6 @@ int main(void)
         if (IsKeyPressed(KEY_R)) { lights[1].enabled = !lights[1].enabled; UpdateLightValues(shader, lights[1]);}
         if (IsKeyPressed(KEY_G)) { lights[2].enabled = !lights[2].enabled; UpdateLightValues(shader, lights[2]);}
         if (IsKeyPressed(KEY_B)) { lights[3].enabled = !lights[3].enabled; UpdateLightValues(shader, lights[3]);}
-
-        UpdateCamera(&camera);              // Update camera
 
         // check for collisions
         dSpaceCollide(space, 0, &nearCallback);
