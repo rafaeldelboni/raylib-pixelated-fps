@@ -39,11 +39,23 @@ typedef struct PlaneBody {
     int * indexes;
 } PlaneGeom;
 
+typedef struct BulletBody {
+    dBodyID body;
+    dGeomID geom;
+} BulletBody;
+
 typedef struct PlayerBody {
     dBodyID body;
     dGeomID geom;
     dGeomID footGeom;
 } PlayerBody;
+
+typedef struct EnemyBody {
+    dBodyID body;
+    dGeomID geom;
+    dGeomID footGeom;
+    int life;
+} EnemyBody;
 
 enum INDEX
 {
@@ -89,7 +101,7 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
     dContact contact[MAX_CONTACTS]; // up to MAX_CONTACTS contacts per body-body
     for (i = 0; i < MAX_CONTACTS; i++) {
         /*contact[i].surface.mode = dContactBounce | dContactSoftCFM | dContactApprox1;*/
-        contact[i].surface.mode = dContactBounce;
+        contact[i].surface.mode = dContactBounce | dContactApprox0;
         contact[i].surface.mu = dInfinity;
         contact[i].surface.bounce = 0.0;
         contact[i].surface.bounce_vel = 0.1;
@@ -118,7 +130,7 @@ PlayerBody createPlayerBody(dSpaceID space, dWorldID world) {
     dGeomDisable(footGeom);
 
     // capsule torso
-    dMassSetCapsuleTotal(&m, 1, 3, 0.5, 1.0);
+    dMassSetCapsuleTotal(&m, 50, 3, 0.5, 1.0);
     dBodySetMass(obj, &m);
     dGeomSetBody(geom, obj);
 
@@ -140,7 +152,7 @@ PlayerBody createPlayerBody(dSpaceID space, dWorldID world) {
     return (PlayerBody){.body = obj, .geom = geom, .footGeom = footGeom};
 }
 
-PlayerBody createEnemyBody(dSpaceID space, dWorldID world) {
+EnemyBody createEnemyBody(dSpaceID space, dWorldID world) {
     dMass m;
     dMatrix3 R;
     dBodyID obj = dBodyCreate(world);
@@ -151,7 +163,7 @@ PlayerBody createEnemyBody(dSpaceID space, dWorldID world) {
     dGeomDisable(footGeom);
 
     // capsule torso
-    dMassSetCapsuleTotal(&m, 1, 3, 0.5, 1.0);
+    dMassSetCapsuleTotal(&m, 50, 3, 0.5, 1.0);
     dBodySetMass(obj, &m);
     dGeomSetBody(geom, obj);
 
@@ -160,7 +172,7 @@ PlayerBody createEnemyBody(dSpaceID space, dWorldID world) {
     dGeomSetOffsetPosition(footGeom, 0, 0, 0.5);
 
     // give the body a position and rotation
-    dBodySetPosition(obj, -62, 5, 15);
+    dBodySetPosition(obj, -60, 5, 10);
     dRFromAxisAndAngle(R, 1.0f, 0, 0, 90.0f*DEG2RAD);
     dBodySetRotation(obj, R);
 
@@ -170,10 +182,14 @@ PlayerBody createEnemyBody(dSpaceID space, dWorldID world) {
     dGeomSetCategoryBits (geom, catBits[ENEMY]);
     dGeomSetCollideBits (geom, catBits[ALL] & (~catBits[ENEMY_BULLET]));
 
-    return (PlayerBody){.body = obj, .geom = geom, .footGeom = footGeom};
+    return (EnemyBody) {
+        .body = obj,
+        .geom = geom,
+        .footGeom = footGeom,
+        .life = 100};
 }
 
-dBodyID createBullet(dSpaceID space, dWorldID world) {
+BulletBody createBullet(dSpaceID space, dWorldID world) {
     dBodyID obj = dBodyCreate(world);
     dGeomID geom;
     dMass m;
@@ -189,7 +205,7 @@ dBodyID createBullet(dSpaceID space, dWorldID world) {
     dBodySetMass(obj, &m);
     dBodyDisable(obj);
 
-    return obj;
+    return (BulletBody) {.body = obj, .geom = geom};
 }
 
 dBodyID createRandomObject(dSpaceID space, dWorldID world, int type) {
@@ -425,6 +441,7 @@ int main(void)
     Model ball = LoadModelFromMesh(GenMeshSphere(.5,32,32));
     Model bullet = LoadModelFromMesh(GenMeshSphere(0.1,32,32));
     Model aim = LoadModelFromMesh(GenMeshSphere(.003,32,32));
+    Model cylinder = LoadModelFromMesh(GenMeshCylinder(.5, 1, 32));
     Model plane = LoadModel("resources/grass-plane.obj"); // Load the animated model mesh and basic data
 
     // texture the models
@@ -433,6 +450,7 @@ int main(void)
 
     box.materials[0].maps[MAP_DIFFUSE].texture = texture;
     ball.materials[0].maps[MAP_DIFFUSE].texture = texture;
+    cylinder.materials[0].maps[MAP_DIFFUSE].texture = texture;
     plane.materials[0].maps[MAP_DIFFUSE].texture = texturePlane;
 
     Shader shader = LoadShader("resources/simpleLight.vs", "resources/simpleLight.fs");
@@ -448,6 +466,7 @@ int main(void)
     // models share the same shader
     box.materials[0].shader = shader;
     ball.materials[0].shader = shader;
+    cylinder.materials[0].shader = shader;
     plane.materials[0].shader = shader;
 
     // using 4 point lights, white, red, green and blue
@@ -480,12 +499,13 @@ int main(void)
         objects[i] = createRandomObject(space, world, i);
     }
 
-    dBodyID bullets[numBullets];
+    BulletBody bullets[numBullets];
     for (int i = 0; i < numBullets; i++) {
         bullets[i] = createBullet(space, world);
     }
 
     PlayerBody playerBody = createPlayerBody(space, world);
+    EnemyBody enemyBody = createEnemyBody(space, world);
     dContactGeom contact;
     PlayerInputs playerInputs;
 
@@ -563,7 +583,7 @@ int main(void)
                 }
 
                 if (playerInputs.SHOOT) {
-                    dBodyID current_bullet_body = bullets[current_bullet % numBullets];
+                    dBodyID current_bullet_body = bullets[current_bullet % numBullets].body;
                     dBodyEnable(current_bullet_body);
 
                     dBodySetAngularVel (current_bullet_body,0,0,0);
@@ -603,11 +623,15 @@ int main(void)
                 }
 
                 for (int i = 0; i < numBullets; i++) {
-                    dBodyID current_bullet_body = bullets[i];
-                    drawBodyModel(current_bullet_body, bullet);
+                    if (dCollide(enemyBody.geom, bullets[i].geom, 1, &contact, sizeof(dContactGeom))) {
+                        printf("HIT! %d \n", i);
+                    }
+                    drawBodyModel(bullets[i].body, bullet);
                 }
                 DrawModel(aim, cameraAim.position, 1.0f, RED);
                 DrawModel(plane, (Vector3){0,0,0}, 1.0f, WHITE);
+
+                drawBodyCylinder(enemyBody.body, cylinder);
 
             EndMode3D();
 
