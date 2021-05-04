@@ -1,3 +1,4 @@
+#include "ode/common.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlights.h"
@@ -245,6 +246,18 @@ dBodyID createRandomObject(dSpaceID space, dWorldID world, int type) {
 
     dBodySetRotation(obj, R);
     return obj;
+}
+
+void rotateBodyZ(dBodyID body, float rotateVel) {
+    //Rotating left and right
+    dBodyEnable (body); // case its gone to sleep
+    float* qt = (float *) dBodyGetQuaternion(body);
+    Quaternion qt1 = {.w = qt[0], .x = qt[1], .y = qt[2], .z = qt[3]};
+    Quaternion qt2 = QuaternionFromAxisAngle((Vector3){0, 0, 1}, rotateVel);
+    Quaternion qt3 = QuaternionMultiply(qt1, qt2);
+
+    float qt4[4] = {qt3.w, qt3.x, qt3.y, qt3.z};
+    dBodySetQuaternion(body, qt4);
 }
 
 PlaneGeom createStaticPlane(dSpaceID space, Model plane) {
@@ -542,6 +555,8 @@ int main(void)
             .SHOOT = IsMouseButtonPressed(MOUSE_LEFT_BUTTON),
             .IS_JUMPING = dCollide(planeGeom.geom, playerBody.footGeom, 1, &contact, sizeof(dContactGeom))
         };
+
+        rotateBodyZ(enemyBody.body , 0.02f);
 
         //----------------------------------------------------------------------------------
         // Draw
