@@ -1,4 +1,6 @@
+#include "ode/collision.h"
 #include "ode/common.h"
+#include "ode/contact.h"
 #include "ode/objects.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -92,7 +94,7 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
 {
     (void)data;
     int i;
-    // if (o1->body && o2->body) return;
+    /*if (o1->body && o2->body) return;*/
 
     // exit without doing anything if the two bodies are connected by a joint
     dBodyID b1 = dGeomGetBody(o1);
@@ -102,20 +104,22 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
 
     dContact contact[MAX_CONTACTS]; // up to MAX_CONTACTS contacts per body-body
     for (i = 0; i < MAX_CONTACTS; i++) {
-        /*contact[i].surface.mode = dContactBounce | dContactSoftCFM | dContactApprox1;*/
-        contact[i].surface.mode = dContactBounce | dContactApprox0;
+        contact[i].surface.mode = dContactBounce | dContactSoftERP | dContactSoftCFM | dContactApprox1;
         contact[i].surface.mu = dInfinity;
         contact[i].surface.bounce = 0.0;
         contact[i].surface.bounce_vel = 0.1;
-        /*contact[i].surface.soft_cfm = 0.01;*/
+        contact[i].surface.soft_erp = 0.5;
+        contact[i].surface.soft_cfm = 0.0003;
     }
+
     int numc = dCollide(o1, o2, MAX_CONTACTS, &contact[0].geom,
-                        sizeof(dContact));
+            sizeof(dContact));
     if (numc) {
         dMatrix3 RI;
         dRSetIdentity(RI);
         for (i = 0; i < numc; i++) {
-            dJointID c = dJointCreateContact(world, contactgroup, contact + i);
+            dJointID c =
+                dJointCreateContact(world, contactgroup, contact + i);
             dJointAttach(c, b1, b2);
         }
     }
@@ -249,22 +253,6 @@ dBodyID createRandomObject(dSpaceID space, dWorldID world, int type) {
     return obj;
 }
 
-void rotateBodyZ(dBodyID body, float rotateVel) {
-    //Rotating left and right
-    dBodyEnable (body); // case its gone to sleep
-    float* qt = (float *) dBodyGetQuaternion(body);
-    Quaternion qt1 = {.w = qt[0], .x = qt[1], .y = qt[2], .z = qt[3]};
-    Quaternion qt2 = QuaternionFromAxisAngle((Vector3){0, 0, 1}, rotateVel);
-    Quaternion qt3 = QuaternionMultiply(qt1, qt2);
-
-    float qt4[4] = {qt3.w, qt3.x, qt3.y, qt3.z};
-    dBodySetQuaternion(body, qt4);
-}
-
-Quaternion QuaternionConjugate(Quaternion qt) {
-    return QuaternionMultiply(qt, (Quaternion){1, -1, -1, -1});
-}
-
 float angleBetweenBodyVectors(dBodyID originBody, dBodyID targetBody) {
     float * originPos = (float *) dBodyGetPosition(originBody);
     float * targetPos = (float *) dBodyGetPosition(targetBody);
@@ -272,10 +260,17 @@ float angleBetweenBodyVectors(dBodyID originBody, dBodyID targetBody) {
     Vector3 origin = (Vector3){.x=originPos[0], .y=originPos[1], .z=originPos[2]};
     Vector3 target = (Vector3){.x=targetPos[0], .y=targetPos[1], .z=targetPos[2]};
 
-    float x = target.x - origin.x;
-    float y = target.z - origin.z;
+    float x = target.z - origin.z;
+    float y = target.x - origin.x;
 
     return atan2(y, x);
+}
+
+void lookAtBody(dBodyID origin, dBodyID target) {
+    float angle = angleBetweenBodyVectors(origin, target);
+    Quaternion qt3 = QuaternionFromEuler(90*DEG2RAD, angle, 0);
+    float qt4[4] = {qt3.w, qt3.x, qt3.y, qt3.z};
+    dBodySetQuaternion(origin, qt4);
 }
 
 PlaneGeom createStaticPlane(dSpaceID space, Model plane) {
@@ -574,18 +569,8 @@ int main(void)
             .IS_JUMPING = dCollide(planeGeom.geom, playerBody.footGeom, 1, &contact, sizeof(dContactGeom))
         };
 
-        // Trying to make enemy look at player
-        float bb = angleBetweenBodyVectors(enemyBody.body, playerBody.body);
-        float * ar = (float *)dBodyGetQuaternion(enemyBody.body);
-        Quaternion qt = (Quaternion){.w=ar[0],.x=ar[1],.y=ar[2],.z=ar[3]};
-        Vector3 outAxis;
-        float outAngle;
-        QuaternionToAxisAngle(qt, &outAxis, &outAngle);
-        printf("angle between enemy and player: %f, body angle: %f \n", bb, outAngle);
-
-        /*if (round(outAngle-bb) != 0.0f) {*/
-            /*rotateBodyZ(enemyBody.body, outAngle-bb*0.05);*/
-        /*}*/
+        // Enemy look at player
+        lookAtBody(enemyBody.body, playerBody.body);
 
         //----------------------------------------------------------------------------------
         // Draw
