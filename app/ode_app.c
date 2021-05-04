@@ -1,4 +1,5 @@
 #include "ode/common.h"
+#include "ode/objects.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rlights.h"
@@ -258,6 +259,23 @@ void rotateBodyZ(dBodyID body, float rotateVel) {
 
     float qt4[4] = {qt3.w, qt3.x, qt3.y, qt3.z};
     dBodySetQuaternion(body, qt4);
+}
+
+Quaternion QuaternionConjugate(Quaternion qt) {
+    return QuaternionMultiply(qt, (Quaternion){1, -1, -1, -1});
+}
+
+float angleBetweenBodyVectors(dBodyID originBody, dBodyID targetBody) {
+    float * originPos = (float *) dBodyGetPosition(originBody);
+    float * targetPos = (float *) dBodyGetPosition(targetBody);
+
+    Vector3 origin = (Vector3){.x=originPos[0], .y=originPos[1], .z=originPos[2]};
+    Vector3 target = (Vector3){.x=targetPos[0], .y=targetPos[1], .z=targetPos[2]};
+
+    float x = target.x - origin.x;
+    float y = target.z - origin.z;
+
+    return atan2(y, x);
 }
 
 PlaneGeom createStaticPlane(dSpaceID space, Model plane) {
@@ -556,7 +574,18 @@ int main(void)
             .IS_JUMPING = dCollide(planeGeom.geom, playerBody.footGeom, 1, &contact, sizeof(dContactGeom))
         };
 
-        rotateBodyZ(enemyBody.body , 0.02f);
+        // Trying to make enemy look at player
+        float bb = angleBetweenBodyVectors(enemyBody.body, playerBody.body);
+        float * ar = (float *)dBodyGetQuaternion(enemyBody.body);
+        Quaternion qt = (Quaternion){.w=ar[0],.x=ar[1],.y=ar[2],.z=ar[3]};
+        Vector3 outAxis;
+        float outAngle;
+        QuaternionToAxisAngle(qt, &outAxis, &outAngle);
+        printf("angle between enemy and player: %f, body angle: %f \n", bb, outAngle);
+
+        /*if (round(outAngle-bb) != 0.0f) {*/
+            /*rotateBodyZ(enemyBody.body, outAngle-bb*0.05);*/
+        /*}*/
 
         //----------------------------------------------------------------------------------
         // Draw
