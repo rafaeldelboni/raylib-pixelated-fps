@@ -1,4 +1,4 @@
-#aaa raylib-pixelated-fps
+# raylib-pixelated-fps
 
 Testing raylib with some pixelated shader.
 
