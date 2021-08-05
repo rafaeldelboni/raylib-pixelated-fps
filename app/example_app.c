@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "raymath.h"
 #include "raylib.h"
+#include "raymath.h"
 
 #if defined(PLATFORM_DESKTOP)
     #define GLSL_VERSION            330
